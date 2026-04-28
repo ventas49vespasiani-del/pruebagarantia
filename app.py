@@ -9,19 +9,18 @@ st.set_page_config(page_title="Seguimiento de Garantías", layout="wide")
 st.title("Gestión de Órdenes de Garantía")
 
 # 1. CONEXIÓN A GOOGLE SHEETS
-# Se usa st.connection para vincular con los Secrets de Streamlit
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# Intentar leer los datos actuales (ttl=0 para que no use memoria caché y siempre esté actualizado)
+# Intentar leer datos existentes
 try:
     df_existente = conn.read(ttl=0)
 except Exception:
-    # Si la hoja está vacía o hay error, definimos las columnas base
+    # Columnas exactas de tu reporte + columna Estado
     columnas = [
-        "N° Orden", "Apertura", "Cierre", "Asesor", "Cliente", 
-        "Codigo", "Descripcion", "Cargo", "Tiempo/Cantidad", 
-        "Venta Neta", "Venta Total", "Costo neto", "Costo Total", 
-        "Utilidad", "Sucursal", "Mes", "Año", "Estado"
+        "N° Orden", "Apertura", "Cierre", "Asesor", "CUIT/DNI", "Cliente", 
+        "Codigo", "Descripcion", "Cargo", "Tiempo/Cantidad", "Venta Neta", 
+        "Venta Total", "Costo neto", "Costo Total", "Utilidad", 
+        "Sucursal", "Mes", "Año", "Estado"
     ]
     df_existente = pd.DataFrame(columns=columnas)
 
@@ -42,9 +41,10 @@ with st.expander("➕ Cargar Nueva Orden de Garantía", expanded=True):
             cierre = st.date_input("Fecha Cierre", datetime.now())
             codigo = st.text_input("Código")
             descripcion = st.text_input("Descripción")
-            cargo = st.text_input("Cargo")
+            cuit = st.text_input("CUIT/DNI")
         
         with col3:
+            cargo = st.text_input("Cargo")
             cantidad = st.number_input("Tiempo / Cantidad", min_value=0.0, step=0.1)
             v_neta = st.number_input("Venta Neta", min_value=0.0)
             c_neto = st.number_input("Costo Neto", min_value=0.0)
@@ -52,20 +52,21 @@ with st.expander("➕ Cargar Nueva Orden de Garantía", expanded=True):
         submit = st.form_submit_button("Registrar Orden")
 
         if submit:
-            if n_orden and cliente:
-                # Cálculos automáticos (siguiendo tu lógica de auditoría)
+            if n_orden:
+                # Cálculos automáticos
                 v_total = v_neta * 1.21
                 c_total = c_neto * 1.10
                 utilidad = v_total - c_total
                 mes_nombre = cierre.strftime("%B")
                 anio_num = cierre.year
 
-                # Crear nueva fila de datos
+                # Crear nueva fila
                 nueva_fila = pd.DataFrame([{
                     "N° Orden": n_orden,
                     "Apertura": str(apertura),
                     "Cierre": str(cierre),
                     "Asesor": asesor,
+                    "CUIT/DNI": cuit,
                     "Cliente": cliente,
                     "Codigo": codigo,
                     "Descripcion": descripcion,
@@ -82,15 +83,15 @@ with st.expander("➕ Cargar Nueva Orden de Garantía", expanded=True):
                     "Estado": estado
                 }])
 
-                # Concatenar con los datos anteriores y subir a Google Sheets
+                # Actualizar y subir
                 df_actualizado = pd.concat([df_existente, nueva_fila], ignore_index=True)
                 conn.update(data=df_actualizado)
                 
-                st.success("✅ Orden guardada exitosamente en la nube.")
+                st.success("✅ Datos guardados en Google Sheets.")
                 st.rerun()
             else:
-                st.warning("Por favor completa los campos obligatorios.")
+                st.error("El campo N° Orden es obligatorio.")
 
-# 3. VISUALIZACIÓN DE TABLA
-st.subheader("📋 Historial de Órdenes Registradas")
+# 3. TABLA DE DATOS
+st.subheader("📋 Registros Actuales")
 st.dataframe(df_existente, use_container_width=True)
