@@ -6,22 +6,23 @@ from datetime import datetime
 st.set_page_config(page_title="Carga de Garantías", layout="wide")
 
 st.title("Seguimiento de Órdenes de Garantía")
-st.write("Registra las órdenes aquí y descarga el reporte al finalizar.")
+st.info("Los datos se mantienen mientras la pestaña esté abierta. Descarga el reporte antes de cerrar.")
 
-# --- INICIALIZACIÓN DEL ALMACENAMIENTO TEMPORAL ---
-# Esto crea una tabla vacía en la memoria del navegador
+# --- DEFINICIÓN DEL ORDEN DE COLUMNAS (Tal cual se carga en la ficha) ---
+COLUMNAS_ORDENADAS = [
+    "N° Orden", "Asesor", "Cliente", "Sucursal", "Estado",  # Grupo 1 (col1)
+    "Apertura", "Cierre", "Codigo", "Descripcion",           # Grupo 2 (col2)
+    "Cargo", "Tiempo/Cantidad", "Venta Neta", "Costo Neto", # Grupo 3 (col3)
+    "Venta Total", "Costo Total", "Utilidad", "Mes", "Año"  # Calculados
+]
+
+# Inicialización del almacenamiento temporal
 if 'tabla_garantias' not in st.session_state:
-    columnas = [
-        "N° Orden", "Apertura", "Cierre", "Asesor", "Cliente", 
-        "Codigo", "Descripcion", "Cargo", "Tiempo/Cantidad", 
-        "Venta Neta", "Venta Total", "Costo neto", "Costo Total", 
-        "Utilidad", "Sucursal", "Mes", "Año", "Estado"
-    ]
-    st.session_state.tabla_garantias = pd.DataFrame(columns=columnas)
+    st.session_state.tabla_garantias = pd.DataFrame(columns=COLUMNAS_ORDENADAS)
 
 # --- FORMULARIO DE CARGA ---
 with st.form("formulario_registro", clear_on_submit=True):
-    st.subheader("📝 Nueva Entrada")
+    st.subheader("📝 Ficha de Carga")
     col1, col2, col3 = st.columns(3)
     
     with col1:
@@ -40,56 +41,69 @@ with st.form("formulario_registro", clear_on_submit=True):
     with col3:
         cargo = st.text_input("Cargo")
         cantidad = st.number_input("Tiempo / Cantidad", min_value=0.0, step=0.1)
-        v_neta = st.number_input("Venta Neta", min_value=0.0)
+        v_neta = st.number_input("Venta Neta (Repuestos)", min_value=0.0)
         c_neto = st.number_input("Costo Neto", min_value=0.0)
 
-    # Botón para añadir a la tabla
     submit = st.form_submit_button("Añadir a la lista")
 
     if submit:
         if n_orden:
-            # Cálculos automáticos para que el Excel sea profesional
+            # Cálculos automáticos (siguiendo tu estructura de auditoría)
             v_total = v_neta * 1.21
             c_total = c_neto * 1.10
             utilidad = v_total - c_total
             
             nueva_fila = {
-                "N° Orden": n_orden, "Apertura": str(apertura), "Cierre": str(cierre),
-                "Asesor": asesor, "Cliente": cliente, "Codigo": codigo, 
-                "Descripcion": descripcion, "Cargo": cargo, "Tiempo/Cantidad": cantidad,
-                "Venta Neta": v_neta, "Venta Total": v_total, "Costo neto": c_neto,
-                "Costo Total": c_total, "Utilidad": utilidad, "Sucursal": sucursal,
-                "Mes": cierre.strftime("%B"), "Año": cierre.year, "Estado": estado
+                "N° Orden": n_orden,
+                "Asesor": asesor,
+                "Cliente": cliente,
+                "Sucursal": sucursal,
+                "Estado": estado,
+                "Apertura": str(apertura),
+                "Cierre": str(cierre),
+                "Codigo": codigo,
+                "Descripcion": descripcion,
+                "Cargo": cargo,
+                "Tiempo/Cantidad": cantidad,
+                "Venta Neta": v_neta,
+                "Costo Neto": c_neto,
+                "Venta Total": round(v_total, 2),
+                "Costo Total": round(c_total, 2),
+                "Utilidad": round(utilidad, 2),
+                "Mes": cierre.strftime("%B"),
+                "Año": cierre.year
             }
             
-            # Guardar en la memoria de la sesión
+            # Guardar en la memoria
             st.session_state.tabla_garantias = pd.concat([
                 st.session_state.tabla_garantias, 
                 pd.DataFrame([nueva_fila])
             ], ignore_index=True)
-            st.success(f"Orden {n_orden} añadida a la tabla.")
+            st.success(f"✅ Orden {n_orden} agregada.")
         else:
-            st.error("Debes poner un número de orden.")
+            st.error("El número de orden es obligatorio.")
 
-# --- VISTA PREVIA Y DESCARGA ---
+# --- VISTA PREVIA Y EXPORTACIÓN ---
 st.divider()
-st.subheader("📋 Órdenes Cargadas en esta Sesión")
-
 if not st.session_state.tabla_garantias.empty:
-    # Mostrar tabla
-    st.dataframe(st.session_state.tabla_garantias, use_container_width=True)
+    st.subheader("📋 Vista Previa del Reporte")
     
-    # Botón para descargar Excel
-    csv = st.session_state.tabla_garantias.to_csv(index=False).encode('utf-8-sig')
+    # Reordenar las columnas antes de mostrar y descargar (por seguridad)
+    df_export = st.session_state.tabla_garantias[COLUMNAS_ORDENADAS]
+    
+    st.dataframe(df_export, use_container_width=True)
+    
+    # Botón para descargar Excel (formato CSV compatible)
+    csv = df_export.to_csv(index=False).encode('utf-8-sig')
     st.download_button(
-        label="📥 Descargar todo como Excel (CSV)",
+        label="📥 Descargar Reporte en Columnas Ordenadas",
         data=csv,
-        file_name=f"reporte_garantias_{datetime.now().strftime('%d_%m_%Y')}.csv",
+        file_name=f"garantias_ficha_{datetime.now().strftime('%H%M')}.csv",
         mime="text/csv",
     )
     
-    if st.button("🗑️ Borrar toda la tabla"):
-        st.session_state.tabla_garantias = st.session_state.tabla_garantias.iloc[0:0]
+    if st.button("🗑️ Vaciar lista actual"):
+        st.session_state.tabla_garantias = pd.DataFrame(columns=COLUMNAS_ORDENADAS)
         st.rerun()
 else:
-    st.info("Aún no has cargado ninguna orden.")
+    st.info("Aún no has ingresado datos.")
